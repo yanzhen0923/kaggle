@@ -34,21 +34,24 @@ class BlackBox:
         self.validation_X = None
         self.validation_Y = None
         self.test_X = None
+        self.gbm = None
+        self.test_X_original = None
+        self.train_original = None
 
     def get_data(self):
         if self.train_X is not None:
             return self.train_X, self.train_Y, self.validation_X, self.validation_Y, self.test_X
 
         # Load the data
-        test_X_original = pd.read_csv('../datasets/test.csv', header=0)
-        train_orginal = pd.read_csv('../datasets/train.csv', header=0)
+        self.test_X_original = pd.read_csv('/Users/yz/Projects/kaggle/datasets/titanic/test.csv', header=0)
+        self.train_orginal = pd.read_csv('/Users/yz/Projects/kaggle/datasets/titanic/train.csv', header=0)
 
         feature_columns_to_use = ['Pclass', 'Sex', 'Age', 'Fare', 'Parch']
         non_numeric_columns = ['Sex']
 
         # Join the features from train and test together before imputing missing values,
         # in case their distribution is slightly different
-        big_X = train_orginal[feature_columns_to_use].append(test_X_original[feature_columns_to_use])
+        big_X = self.train_orginal[feature_columns_to_use].append(self.test_X_original[feature_columns_to_use])
         big_X_imputed = DataFrameImputer().fit_transform(big_X)
 
         # XGBoost doesn't (yet) handle categorical features automatically, so we need to change
@@ -60,27 +63,33 @@ class BlackBox:
             big_X_imputed[feature] = le.fit_transform(big_X_imputed[feature])
 
         # Prepare the inputs for the model
-        split_pos = int(train_orginal.shape[0] * (2/3))
+        split_pos = int(self.train_orginal.shape[0] * (2/3))
         self.train_X = big_X_imputed[0:split_pos].as_matrix()
-        self.validation_X = big_X_imputed[split_pos:train_orginal.shape[0]].as_matrix()
+        self.validation_X = big_X_imputed[split_pos:self.train_orginal.shape[0]].as_matrix()
 
-        self.train_Y = train_orginal['Survived'][0:split_pos].as_matrix()
-        self.validation_Y = train_orginal['Survived'][split_pos:train_orginal.shape[0]].as_matrix()
+        self.train_Y = self.train_orginal['Survived'][0:split_pos].as_matrix()
+        self.validation_Y = self.train_orginal['Survived'][split_pos:self.train_orginal.shape[0]].as_matrix()
 
-        self.test_X = big_X_imputed[train_orginal.shape[0]::].as_matrix()
+        self.test_X = big_X_imputed[self.train_orginal.shape[0]::].as_matrix()
 
         return self.train_X, self.train_Y, self.validation_X, self.validation_Y, self.test_X
 
     def run(self, max_depth, n_estimators, learning_rate, reg_lambda):
         train_X, train_Y, validation_X, validation_Y, test_X = self.get_data()
-        gbm = xgb.XGBClassifier(max_depth=int(max_depth), n_estimators=int(n_estimators),
+
+        self.gbm = xgb.XGBClassifier(max_depth=int(max_depth), n_estimators=int(n_estimators),
                                 learning_rate=learning_rate,
                                 reg_lambda=reg_lambda)\
             .fit(train_X, train_Y)
 
-        tmp_Y = gbm.predict(validation_X)
+        tmp_Y = self.gbm.predict(validation_X)
 
         return accuracy_score(validation_Y, tmp_Y)
+
+    def generate(self):
+        submission = pd.DataFrame({'PassengerId': self.test_X_original['PassengerId'],
+                                   'Survived': self.gbm.predict(self.test_X)})
+        submission.to_csv("submission.csv", index=False)
 
 # You can experiment with many other options here, using the same .fit() and .predict()
 # methods; see http://scikit-learn.org
@@ -99,5 +108,9 @@ submission.to_csv("submission.csv", index=False)
 '''
 if __name__ == '__main__':
     bb = BlackBox()
-    acc = bb.run(6, 300, 0.15, 1.0)
+    acc = bb.run(7, 322, 0.0111, 7.5333)
     print(acc)
+
+    bb.generate()
+
+    print("done")

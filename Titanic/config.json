@@ -11,7 +11,7 @@
     "variables" : {
         "max_depth" : "(1, 10)",
         "n_estimators" : "(100, 800)",
-        "learning_rate" : "(0.001, 2.00)"
+        "learning_rate" : "(0.001, 2.00)",
         "reg_lambda" : "(0.05, 10.00)"
     }
 }
